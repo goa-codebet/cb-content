@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+
+const array2csv = require('convert-array-to-csv');
+const contentful = require('contentful-management')
+const { Command } = require('commander');
+
+const program = new Command();
+
+program
+  .version('0.0.1')
+  .description('TG-base content management')
+  .command('export-translations [languages]', 'Export translations to CSV')
+  .command('populate-translations [languages]', 'Populate translations from sheet with content from Contentful')
+  // .command('search [query]', 'search with optional query').alias('s')
+  // .command('update', 'update installed packages', { executableFile: 'myUpdateSubCommand' })
+  // .command('list', 'list packages installed', { isDefault: true });
+
+program.parse(process.argv);
