@@ -1,75 +1,82 @@
 #!/usr/bin/env node
 const csvtojson = require('csvtojson');
-const contentful = require('contentful-management')
+const contentful = require('contentful-management');
 const axios = require('axios');
 const Papa = require('papaparse');
 const { Command } = require('commander');
 const { findOrCreateEntry } = require('./utils');
-const fs = require('fs')
+const fs = require('fs');
 
-const main = async ({source, sheet = '', environmentId = 'master', spaceId, languages, accessToken }) => {
-  
+const main = async ({
+  source,
+  sheet = '',
+  environmentId = 'master',
+  spaceId,
+  languages,
+  accessToken,
+}) => {
   const getSource = async (source, sheet) => {
     // If source starts with ./ or / expect file
     if (source.match(/^(.\/|\/)/)) {
-      const res = fs.readFileSync(source, 'utf8')
+      const res = fs.readFileSync(source, 'utf8');
       return res;
-    }
-    else {
-      if (sheet)
-        sheet = `&sheet=${sheet}`
-        
+    } else {
+      if (sheet) sheet = `&sheet=${sheet}`;
+
       var url = `https://docs.google.com/spreadsheets/d/${source}/gviz/tq?tqx=out:csv${sheet}`;
-      var res = await axios.get(url)
-      return res.data
+      var res = await axios.get(url);
+      return res.data;
     }
-  }
-    
-  const contentfulClient = await contentful.createClient({ accessToken })
-  const client =  await contentfulClient
+  };
+
+  const contentfulClient = await contentful.createClient({ accessToken });
+  const client = await contentfulClient
     .getSpace(spaceId)
     .then(s => s.getEnvironment(environmentId))
-    .catch(e => console.log(e))
+    .catch(e => console.log(e));
 
   // Better logic here. Check total from response
-  const [ entries1, entries2 ] = await Promise.all([
+  const [entries1, entries2] = await Promise.all([
     client.getEntries({
       limit: 1000,
-      'content_type': 'translation',
+      content_type: 'translation',
     }),
     client.getEntries({
       limit: 1000,
       skip: 1000,
-      'content_type': 'translation',
-    })
+      content_type: 'translation',
+    }),
   ]);
 
-  const entries = [
-    ...entries1.items,
-    ...entries2.items
-  ];
+  const entries = [...entries1.items, ...entries2.items];
 
   var res = await getSource(source, sheet);
   var input = await csvtojson().fromString(res);
   const headers = ['identifier', ...languages];
-  const csv = []
+  const csv = [];
   input.forEach(item => {
-    const row = [item.identifier]
-    const entry = entries.find(e => e.fields && e.fields.identifier && e.fields.identifier["en-US"] === item.identifier)
-    
+    const row = [item.identifier];
+    const entry = entries.find(
+      e =>
+        e.fields &&
+        e.fields.identifier &&
+        e.fields.identifier['en-US'] === item.identifier
+    );
+
     if (entry) {
       languages.forEach(l => {
-        row.push(entry.fields.translation && entry.fields.translation[l] 
-          ? entry.fields.translation[l].trim()  // Replace new line if it's the last char...
-          : ''
-        )
-      })
+        row.push(
+          entry.fields.translation && entry.fields.translation[l]
+            ? entry.fields.translation[l].trim() // Replace new line if it's the last char...
+            : ''
+        );
+      });
     }
-    csv.push(row)
-  })
+    csv.push(row);
+  });
 
-  console.log(Papa.unparse(csv))
-}
+  console.log(Papa.unparse(csv));
+};
 
 const program = new Command();
 program
@@ -77,7 +84,7 @@ program
   .requiredOption('-s, --spaceId <spaceId>', 'Space Id')
   .requiredOption('--source <source>', 'Google Sheet Id or file')
   .option('-e, --environmentId <environmentId>', 'Environment Id')
-  .option('--tab <tab>', 'Google Sheet Tab')
+  .option('--tab <tab>', 'Google Sheet Tab');
 
 program.parseAsync(process.argv);
 
@@ -88,4 +95,4 @@ main({
   source: program.source,
   sheet: program.tab,
   languages: program.args,
-})
+});

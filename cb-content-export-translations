@@ -1,60 +1,63 @@
 #!/usr/bin/env node
 const array2csv = require('convert-array-to-csv');
 const Papa = require('papaparse');
-const contentful = require('contentful-management')
+const contentful = require('contentful-management');
 const { Command } = require('commander');
 
-const main = async ({accessToken, spaceId, environmentId = 'master', languages}) => {
-  const contentfulClient = await contentful.createClient({ accessToken })
-  const client =  await contentfulClient
+const main = async ({
+  accessToken,
+  spaceId,
+  environmentId = 'master',
+  languages,
+}) => {
+  const contentfulClient = await contentful.createClient({ accessToken });
+  const client = await contentfulClient
     .getSpace(spaceId)
     .then(s => s.getEnvironment(environmentId))
-    .catch(e => console.log(e))
-    
+    .catch(e => console.log(e));
+
   // Better logic here. Check total from response
-  const [ entries1, entries2 ] = await Promise.all([
+  const [entries1, entries2] = await Promise.all([
     client.getEntries({
       limit: 1000,
-      'content_type': 'translation',
+      content_type: 'translation',
     }),
     client.getEntries({
       limit: 1000,
       skip: 1000,
-      'content_type': 'translation',
-    })
+      content_type: 'translation',
+    }),
   ]);
 
-  const entries = [
-    ...entries1.items,
-    ...entries2.items
-  ];
+  const entries = [...entries1.items, ...entries2.items];
 
   const headers = ['identifier', ...languages];
   const csv = [headers];
   entries.forEach(e => {
     if (!e.fields.identifier) return;
-    
+
     const row = [];
-    row.push(e.fields.identifier[Object.keys(e.fields.identifier)[0]])
-    
+    row.push(e.fields.identifier[Object.keys(e.fields.identifier)[0]]);
+
     languages.forEach(l => {
-      row.push(e.fields.translation 
-        ? e.fields.translation[l].replace(/\n$/)  // Replace new line if it's the last char...
-        : ''
-      )
-    })
+      row.push(
+        e.fields.translation
+          ? e.fields.translation[l].replace(/\n$/) // Replace new line if it's the last char...
+          : ''
+      );
+    });
 
-    csv.push(row)
-  })
+    csv.push(row);
+  });
 
-  console.log(Papa.unparse(csv))
-}
+  console.log(Papa.unparse(csv));
+};
 
 const program = new Command();
 program
   .requiredOption('-t, --accessToken <accessToken>', 'Content Management Token')
   .requiredOption('-s, --spaceId <spaceId>', 'Space Id')
-  .option('-e, --environmentId <environmentId>', 'Environment Id')
+  .option('-e, --environmentId <environmentId>', 'Environment Id');
 
 program.parseAsync(process.argv);
 
@@ -63,4 +66,4 @@ main({
   spaceId: program.spaceId,
   environmentId: program.environmentId,
   languages: program.args,
-})
+});
