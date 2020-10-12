@@ -11,6 +11,7 @@ program
   .description('TG-base content management')
   .command('export-translations [languages]', 'Export translations to CSV')
   .command('populate-translations [languages]', 'Populate translations from sheet with content from Contentful')
+  .command('populate-game-from-aleacc', 'Populate game from aleacc')
   // .command('search [query]', 'search with optional query').alias('s')
   // .command('update', 'update installed packages', { executableFile: 'myUpdateSubCommand' })
   // .command('list', 'list packages installed', { isDefault: true });
