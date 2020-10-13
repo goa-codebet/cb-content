@@ -3,13 +3,14 @@ const contentful = require('contentful-management');
 const Papa = require('papaparse');
 const fs = require('fs');
 const path = require('path');
+const { Command } = require('commander');
 const { findOrCreateEntry } = require('./utils');
 
 const main = async ({
   accessToken = process.env.TOKEN,
   spaceId,
   environmentId = 'master',
-  dataFile,
+  source,
   languages,
 }) => {
   const contentfulClient = await contentful.createClient({ accessToken });
@@ -20,7 +21,7 @@ const main = async ({
 
   let jsonData;
 
-  const filePath = path.resolve(dataFile);
+  const filePath = path.resolve(source);
   try {
     const csvData = fs.readFileSync(filePath);
     jsonData = Papa.parse(String(csvData), { header: true });
@@ -72,7 +73,7 @@ const program = new Command();
 program
   .requiredOption('-t, --accessToken <accessToken>', 'Content Management Token')
   .requiredOption('-s, --spaceId <spaceId>', 'Space Id')
-  .requiredOption('-d, --dataFile <datafile>', 'CSV data file')
+  .requiredOption('--source <source>', 'CSV source file')
   .option('-e, --environmentId <environmentId>', 'Environment Id');
 
 program.parseAsync(process.argv);
@@ -80,7 +81,7 @@ program.parseAsync(process.argv);
 main({
   accessToken: program.accessToken,
   spaceId: program.spaceId,
-  dataFile: program.dataFile,
-  environmentId: program.environtmentId,
+  source: program.source,
+  environmentId: program.environmentId,
   languages: program.args,
 });
