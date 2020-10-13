@@ -1,0 +1,133 @@
+#!/usr/bin/env node
+const contentful = require('contentful-management');
+const axios = require('axios');
+const { Command } = require('commander');
+const fs = require('fs');
+
+const main = async ({
+  source,
+  sheet = '',
+  environmentId = 'master',
+  spaceId,
+  aleaccField,
+  cmsField,
+  accessToken,
+  defaultLocale = 'en-US',
+}) => {
+  const getSource = async (source, sheet) => {
+    const res = fs.readFileSync(source, 'utf8');
+    return JSON.parse(res);
+  };
+
+  const rename = name => {
+    if (name === 'Elk')
+      return 'Elk Studios';
+    if (name === 'Foxium (NYX)')
+      return 'Foxium';
+    if (name === 'Kalamba (Quickspin)')
+      return 'Kalamba';
+    if (name === 'Big Time Gaming (Quickspin)')
+      return 'Big Time Gaming';
+    if (name === 'Scientific Games (NYX)')
+      return 'Scientific Games';
+    return name;
+  }
+
+  const contentfulClient = await contentful.createClient({ accessToken });
+  const client = await contentfulClient
+    .getSpace(spaceId)
+    .then(s => s.getEnvironment(environmentId))
+    .catch(e => console.log(e));
+
+  // Better logic here. Check total from response
+  const [entries1, entries2, entries3] = await Promise.all([
+    client.getEntries({
+      limit: 1000,
+      content_type: 'game',
+    }),
+    client.getEntries({
+      limit: 1000,
+      skip: 1000,
+      content_type: 'game',
+    }),
+    client.getEntries({
+      limit: 1000,
+      skip: 2000,
+      content_type: 'game',
+    }),
+  ]);
+
+  const entries = [...entries1.items, ...entries2.items, ...entries3.items];
+  var aleaccGames = await getSource(source, sheet);
+  const times = []
+  for (var k in entries) {
+    let entry = entries[k];
+    const start = Date.now();
+    
+    const g = aleaccGames.find(ag => ag.Id === entry.fields.backendId[defaultLocale])
+    if (!g || entry.isArchived()) {
+      console.warn(`${k}/${entries.length} Skip. Missing game in aleacc or entry is archived.`);
+      continue;
+    }
+    
+    // Set field if field is missing
+    if (!entry.fields[cmsField])
+      entry.fields[cmsField] = {}
+      
+    // Only update if it's neeeded...
+    if (entry.fields[cmsField][defaultLocale] === rename(g[aleaccField])) {
+      console.warn(`${k}/${entries.length} Skip. Fields already the same.`);
+      continue;
+    }
+    
+    entry.fields[cmsField][defaultLocale] = rename(g[aleaccField])
+    
+    // Store publish state
+    const wasPublished = entry.isPublished();
+    
+    // Catch errors
+    try {
+      // Update entry
+      entry = await entry.update()
+      
+      // If entry was published, publish it with new info
+      if (wasPublished) {
+        entry = await entry.publish()
+      }
+    } catch (e) {
+      console.log(e)
+    }
+    
+    // Performance
+    const time = Date.now() - start;
+    times.push(time)
+    
+    // Est remaninig
+    const avg = times.reduce((a,b) => a+b, 0) / times.length
+    const remaninig = (entries.length - k) * avg
+    
+    console.log(`${k}/${entries.length} Game ${entry.fields.backendId[defaultLocale]} \t took ${time}ms. \t Est remaining ${Math.floor(remaninig/1000/60)}m`);
+  }
+};
+
+const program = new Command();
+program
+  .requiredOption('-t, --accessToken <accessToken>', 'Content Management Token')
+  .requiredOption('-s, --spaceId <spaceId>', 'Space Id')
+  .requiredOption('--source <source>', 'File')
+  .requiredOption('--cmsField <cmsField>', 'Field to copy to')
+  .requiredOption('--aleaccField <aleaccField>', 'Field to copy from')
+  .option('-e, --environmentId <environmentId>', 'Environment Id')
+  .option('--defaultLocale <defaultLocale>', 'Default locale in cms')
+
+program.parseAsync(process.argv);
+
+main({
+  accessToken: program.accessToken,
+  spaceId: program.spaceId,
+  environmentId: program.environmentId,
+  source: program.source,
+  sheet: program.tab,
+  aleaccField: program.aleaccField,
+  cmsField: program.cmsField,
+});
