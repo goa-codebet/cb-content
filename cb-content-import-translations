@@ -1,0 +1,86 @@
+#!/usr/bin/env node
+const contentful = require('contentful-management');
+const Papa = require('papaparse');
+const fs = require('fs');
+const path = require('path');
+const { findOrCreateEntry } = require('./utils');
+
+const main = async ({
+  accessToken = process.env.TOKEN,
+  spaceId,
+  environmentId = 'master',
+  dataFile,
+  languages,
+}) => {
+  const contentfulClient = await contentful.createClient({ accessToken });
+  const client = await contentfulClient
+    .getSpace(spaceId)
+    .then(s => s.getEnvironment(environmentId))
+    .catch(console.error);
+
+  let jsonData;
+
+  const filePath = path.resolve(dataFile);
+  try {
+    const csvData = fs.readFileSync(filePath);
+    jsonData = Papa.parse(String(csvData), { header: true });
+  } catch (e) {
+    console.error(e);
+    process.exit(0);
+  }
+
+  const allowedFields = ['identifier', ...languages];
+  const dataToImport = jsonData.data.map(field =>
+    Object.keys(field)
+      .filter(key => allowedFields.includes(key))
+      .reduce((obj, key) => {
+        obj[key] = field[key];
+        return obj;
+      }, {})
+  );
+
+  for (let i in dataToImport) {
+    console.log(`${Number(i) + 1}/${dataToImport.length}`);
+
+    const item = dataToImport[i];
+
+    const data = { fields: { translation: {} } };
+    languages.forEach(l => {
+      data.fields.translation[l] = item[l];
+    });
+
+    let entry = await findOrCreateEntry(
+      client,
+      'translation',
+      item.identifier,
+      data
+    );
+    if (!entry.fields) entry.fields = {};
+
+    entry.fields.translation = {
+      ...entry.fields.translation,
+      ...data.fields.translation,
+    };
+
+    const shouldPublish = entry.isPublished();
+    entry = await entry.update();
+    if (shouldPublish) await entry.publish();
+  }
+};
+
+const program = new Command();
+program
+  .requiredOption('-t, --accessToken <accessToken>', 'Content Management Token')
+  .requiredOption('-s, --spaceId <spaceId>', 'Space Id')
+  .requiredOption('-d, --dataFile <datafile>', 'CSV data file')
+  .option('-e, --environmentId <environmentId>', 'Environment Id');
+
+program.parseAsync(process.argv);
+
+main({
+  accessToken: program.accessToken,
+  spaceId: program.spaceId,
+  dataFile: program.dataFile,
+  environmentId: program.environtmentId,
+  languages: program.args,
+});
