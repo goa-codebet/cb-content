@@ -3,7 +3,7 @@ const contentful = require('contentful-management');
 const Papa = require('papaparse');
 const fs = require('fs');
 const path = require('path');
-const { findOrCreateEntry, updateEntry } = require('./utils');
+const { findOrCreateEntry } = require('./utils');
 
 const main = async ({
   accessToken = process.env.TOKEN,

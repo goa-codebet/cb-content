@@ -61,24 +61,7 @@ async function findOrCreateEntry(
   return entry;
 }
 
-async function updateEntry(entry, fields) {
-  var data = {
-    identifier: Object.assign({}, entry.fields.identifier),
-    translation: Object.assign(
-      {},
-      entry.fields.translation,
-      fields.translation
-    ),
-  };
-
-  entry.fields = data;
-  entry = await entry.update();
-
-  if (entry.isUpdated() || !entry.isPublished()) entry.publish();
-}
-
 module.exports = {
   findOrCreateEntry,
   createEntry,
-  updateEntry,
 };
