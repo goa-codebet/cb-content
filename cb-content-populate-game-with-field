@@ -1,0 +1,158 @@
+#!/usr/bin/env node
+const contentful = require('contentful-management');
+const axios = require('axios');
+const { Command } = require('commander');
+const fs = require('fs');
+
+const main = async ({
+  fromSpaceId,
+  fromEnvironmentId,
+  toSpaceId,
+  toEnvironmentId,
+  compareField,
+  sourceField,
+  
+  accessToken,
+  defaultLocale = 'en-US',
+}) => {
+  const start = Date.now();
+  // const fromSpaceId = "tiaucavzeeht"
+  // const fromEnvironmentId = "stage"
+  // const toSpaceId = "spbn66wqwbb7"
+  // const toEnvironmentId = "test_import"
+  // const sourceField = "tags"
+
+  const contentfulClient = await contentful.createClient({ accessToken });
+  const fromClient = await contentfulClient
+    .getSpace(fromSpaceId)
+    .then(s => s.getEnvironment(fromEnvironmentId))
+    .catch(e => console.log(e));
+    
+  const toClient = await contentfulClient
+    .getSpace(toSpaceId)
+    .then(s => s.getEnvironment(toEnvironmentId))
+    .catch(e => console.log(e));
+
+  // Better logic here. Check total from response
+  const [from1, from2, from3, to1, to2, to3] = await Promise.all([
+    fromClient.getEntries({
+      limit: 1000,
+      content_type: 'game',
+    }),
+    fromClient.getEntries({
+      limit: 1000,
+      skip: 1000,
+      content_type: 'game',
+    }),
+    fromClient.getEntries({
+      limit: 1000,
+      skip: 2000,
+      content_type: 'game',
+    }),
+    toClient.getEntries({
+      limit: 1000,
+      content_type: 'game',
+    }),
+    toClient.getEntries({
+      limit: 1000,
+      skip: 1000,
+      content_type: 'game',
+    }),
+    toClient.getEntries({
+      limit: 1000,
+      skip: 2000,
+      content_type: 'game',
+    })
+  ]);
+  
+  const fromEntries = [...from1.items, ...from2.items, ...from3.items];
+  const toEntries = [...to1.items, ...to2.items, ...to3.items];
+
+  const getField = (entry, field, def = null) => 
+    entry && entry.fields && entry.fields[field] 
+      ? entry.fields[field][defaultLocale] 
+      : def
+
+  const times = []
+  for (var k in toEntries) {
+    let toEntry = toEntries[k];
+    const fromEntry = fromEntries.find(e => getField(e, compareField) == getField(toEntry, compareField));
+    
+    if (!fromEntry) {
+      console.log(`${k}/${toEntries.length} Game ${getField(toEntry, 'backendId', '<missing>')}. Skip. Missing source entry.`);
+      continue;
+    }
+    
+    if (!getField(fromEntry, sourceField)) {
+      console.log(`${k}/${toEntries.length} Game ${getField(fromEntry, 'backendId', '<missing>')}. Skip. Missing source field.`);
+      continue;
+    }
+
+    if (getField(toEntry, sourceField, []).sort().join(',') == getField(fromEntry, sourceField, []).sort().join(',')) {
+      console.log(`${k}/${toEntries.length} Game ${getField(fromEntry, 'backendId', '<missing>')}. Skip. Source and Out field same.`);
+      continue;
+    }
+    
+    // const cToTags = getField(toEntry, sourceField, []).sort().join(',')
+    // const cFromTags = getField(fromEntry, sourceField, []).sort().join(',')
+    
+    // console.log(cToTags,cFromTags, (cToTags===cFromTags))
+    
+    if (!toEntry[sourceField])
+      toEntry[sourceField] = {}
+    
+    toEntry[sourceField][defaultLocale] = getField(fromEntry, sourceField)
+    
+    // Store publish state
+    const wasPublished = toEntry.isPublished();
+    
+    // Catch errors
+    try {
+      // Update entry
+      toEntry = await toEntry.update()
+      
+      // If entry was published, publish it with new info
+      if (wasPublished) {
+        toEntry = await toEntry.publish()
+      }
+    } catch (e) {
+      console.log(e)
+    }
+    
+    // Performance
+    const time = Date.now() - start;
+    times.push(time)
+    
+    // Est remaninig
+    const avg = times.reduce((a,b) => a+b, 0) / times.length
+    const remaninig = (toEntries.length - k) * avg
+    
+    console.log(`${k}/${toEntries.length} Game ${getField(toEntry, 'backendId', '<missing>')} \t took ${time}ms. \t Est remaining ${Math.floor(remaninig/1000/60)}m`);
+  }
+};
+
+const program = new Command();
+program
+  .requiredOption('-t, --accessToken <accessToken>', 'Content Management Token')
+  .requiredOption('--fromSpaceId <fromSpaceId>', 'Space to copy from')
+  .requiredOption('--toSpaceId <toSpaceId>', 'Space to copy to')
+  .requiredOption('--compareField <compareField>', 'Field to compare')
+  .requiredOption('--sourceField <sourceField>', 'Field to copy')
+  .option('-e, --toEnvironmentId <toEnvironmentId>', 'Environment Id')
+  .option('-e, --fromEnvironmentId <fromEnvironmentId>', 'Environment Id')
+  
+  .option('--defaultLocale <defaultLocale>', 'Default locale in cms')
+
+program.parseAsync(process.argv);
+
+main({
+  accessToken: program.accessToken,
+  defaultLocale: program.defaultLocale,
+  
+  fromSpaceId: program.fromSpaceId,
+  fromEnvironmentId: program.fromEnvironmentId,
+  toSpaceId: program.toSpaceId,
+  toEnvironmentId: program.toEnvironmentId,
+  compareField: program.compareField,
+  sourceField: program.sourceField,
+});
