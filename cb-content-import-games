@@ -7,7 +7,7 @@ const { findOrCreateEntry, findOrCreateAsset, createLink } = require('./utils');
 
 const main = async ({
   fromSpaceId,
-  fromEnvironmentId,
+  fromEnvironmentId = 'master',
   deliveryToken,
   toSpaceId,
   toEnvironmentId,
@@ -188,13 +188,32 @@ async function importContentfulGame(client, game, includes, forceCats = null) {
     await newgame.publish();
   }
 
-  // console.log('newgame.fields')
-  // console.log(newgame.fields)
-  // console.log('game.fields')
-  // console.log(game.fields)
-
   console.timeEnd(logKey);
   console.log('----------------');
 }
 
-main({});
+const program = new Command();
+program
+  .requiredOption('--fromSpaceId <fromSpaceId>', 'Space to import games from')
+  .requiredOption('--deliveryToken <deliveryToken>', 'API Delivery token')
+  .requiredOption('--toSpaceId <toSpaceId>', 'Space to import games to')
+  .requiredOption(
+    '--toEnvironmentId <toEnvironmentId>',
+    'Environment to import games to'
+  )
+  .requiredOption('--accessToken <accessToken>', 'Access token')
+  .option(
+    '--fromEnvironmentId <fromEnvironmentId>',
+    'Environment to import games from'
+  );
+
+program.parseAsync(process.argv);
+
+main({
+  fromSpaceId: program.fromSpaceId,
+  fromEnvironmentId: program.fromEnvironmentId,
+  deliveryToken: program.deliveryToken,
+  toSpaceId: program.toSpaceId,
+  toEnvironmentId: program.toEnvironmentId,
+  accessToken: program.accessToken,
+});

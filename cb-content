@@ -17,7 +17,8 @@ program
   )
   .command('populate-game-from-aleacc', 'Populate game from aleacc')
   .command('populate-game-with-field', 'Populate with field from other Space')
-  
+  .command('import-games', 'Import games from one space to another');
+
 // .command('search [query]', 'search with optional query').alias('s')
 // .command('update', 'update installed packages', { executableFile: 'myUpdateSubCommand' })
 // .command('list', 'list packages installed', { isDefault: true });
