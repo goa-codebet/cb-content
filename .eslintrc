@@ -1,0 +1,47 @@
+{
+  "parser": "babel-eslint",
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended"
+  ],
+  "plugins": [
+    "react-hooks"
+  ],
+  "env": {
+    "browser": true,
+    "commonjs": true,
+    "es6": true,
+    "node": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 8,
+    "ecmaFeatures": {
+      "jsx": true,
+      "modules": true,
+      "generators": true,
+      "arrowFunctions": true
+    },
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-console": 0,
+    "no-debugger": 0,
+    "react/no-children-prop": "off",
+    "react/prop-types": "off",
+    "no-unused-vars":"warn",
+    "no-useless-escape": 0,
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn"
+  },
+  "globals": {
+    "__SERVER__": true,
+    "__CLIENT__": true,
+    "__CONFIG__": true,
+    "__VERSION__": true
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  }
+}
