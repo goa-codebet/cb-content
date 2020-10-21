@@ -1,0 +1,200 @@
+#!/usr/bin/env node
+const contentfulManagement = require('contentful-management');
+const contentful = require('contentful');
+const { Command } = require('commander');
+const _ = require('lodash');
+const { findOrCreateEntry, findOrCreateAsset, createLink } = require('./utils');
+
+const main = async ({
+  fromSpaceId,
+  fromEnvironmentId,
+  deliveryToken,
+  toSpaceId,
+  toEnvironmentId,
+  accessToken,
+}) => {
+  const contentfulManagementClient = await contentfulManagement.createClient({
+    accessToken,
+  });
+
+  const contentfulClient = await contentful.createClient({
+    space: fromSpaceId,
+    environment: fromEnvironmentId,
+    accessToken: deliveryToken,
+    resolveLinks: false,
+  });
+
+  const toClient = await contentfulManagementClient
+    .getSpace(toSpaceId)
+    .then(s => s.getEnvironment(toEnvironmentId))
+    .catch(console.error);
+
+  const [from1, from2, from3] = await Promise.all([
+    contentfulClient.getEntries({
+      limit: 1000,
+      include: 2,
+      content_type: 'game',
+    }),
+    contentfulClient.getEntries({
+      limit: 1000,
+      skip: 1000,
+      include: 2,
+      content_type: 'game',
+    }),
+    contentfulClient.getEntries({
+      limit: 1000,
+      skip: 2000,
+      include: 2,
+      content_type: 'game',
+    }),
+  ]).catch(console.error);
+
+  const fromItems = [...from1.items, ...from2.items, ...from3.items];
+
+  const fromIncludes = _.merge(
+    {},
+    from1.includes,
+    from2.includes,
+    from3.includes
+  );
+
+  await runImportContentfulGames(toClient, fromItems, fromIncludes);
+};
+
+async function runImportContentfulGames(
+  client,
+  items,
+  includes,
+  forceCats = null
+) {
+  const errors = [];
+  for (var k in items) {
+    try {
+      console.log(`Game ${k}/${items.length}`);
+      await importContentfulGame(
+        client,
+        items[k],
+        [...includes.Entry, ...includes.Asset],
+        forceCats
+      );
+    } catch (e) {
+      console.log(e);
+      console.log(' ');
+      console.log('!! -- !!');
+      console.log('!! ERROR - Store and move on... !!');
+      console.log('!! -- !!');
+      console.log(' ');
+      errors.push({
+        g: items[k].fields.name,
+        e,
+      });
+    }
+  }
+
+  console.log(errors);
+}
+
+async function categories2ref(client, item_names, locale = 'en-US') {
+  let items = [];
+  for (var k in item_names) {
+    const name = item_names[k];
+    const item = await findOrCreateEntry(
+      client,
+      'gameCategory',
+      _.kebabCase(name),
+      {
+        fields: {
+          identifier: {
+            [locale]: _.kebabCase(name),
+          },
+          name: {
+            [locale]: name,
+          },
+        },
+      }
+    );
+
+    items.push(createLink(item));
+  }
+
+  return items;
+}
+
+async function importContentfulGame(client, game, includes, forceCats = null) {
+  const locale = 'en-US';
+  const logKey = ' Game ' + game.fields.name;
+  console.time(logKey);
+
+  const cats = game.fields.categories
+    .reduce((acc, cat) => {
+      if (includes.find(i => cat.sys.id === i.sys.id))
+        acc.push(includes.find(i => cat.sys.id === i.sys.id));
+
+      return acc;
+    }, [])
+    .map(x => x.fields.identifier);
+
+  const t = includes.find(x => game.fields.thumbnail.sys.id === x.sys.id);
+  const t_url = t ? t.fields.file.url : '';
+
+  const asset_name = _.kebabCase(
+    `${game.fields.backendId}-${game.fields.provider.toLowerCase()}-${
+      game.fields.platform
+    }-${game.fields.name}`
+  );
+  let t_a = await findOrCreateAsset(client, t_url, asset_name, locale);
+  if (!t_a.isPublished()) t_a = await t_a.publish();
+  const categories = await categories2ref(client, forceCats || cats, locale);
+  let entry = {
+    fields: {
+      identifier: { [locale]: game.fields.identifier },
+      name: { [locale]: game.fields.name },
+      url: { [locale]: game.fields.url },
+      backendId: { [locale]: game.fields.backendId },
+      jackpotName: { [locale]: game.fields.jackpotName },
+      jurisdiction: { [locale]: game.fields.jurisdiction },
+      thumbnail: { [locale]: createLink(t_a) },
+      // bigThumbnail: { [locale]: createAsset(game.fields.bigThumbnail) },
+      // background: { [locale]: createAsset(game.fields.background) },
+      aspectRatio: { [locale]: game.fields.aspectRatio },
+      categories: { [locale]: categories },
+      tags: { [locale]: game.fields.tags },
+      platform: { [locale]: game.fields.platform },
+      provider: { [locale]: game.fields.provider },
+      segment: { [locale]: game.fields.segment },
+      // segments: { [locale]: game.fields.segments },
+      gameInfo: { [locale]: game.fields.gameInfo },
+      extraInfo: { [locale]: game.fields.extraInfo },
+      tableId: { [locale]: game.fields.tableId },
+      // contentPage: { [locale]: game.fields.contentPage },
+      sortOrder: { [locale]: game.fields.sortOrder },
+      externalId: { [locale]: game.fields.externalId },
+      rtp: { [locale]: game.fields.rtp },
+      jackpotPercentageCont: { [locale]: game.fields.jackpotPercentageCont },
+      subprovider: { [locale]: game.fields.subprovider },
+      platforms: { [locale]: game.fields.platforms },
+    },
+  };
+
+  let newgame = null;
+  // Create entry
+  newgame = await findOrCreateEntry(client, 'game', game.fields.identifier, {});
+
+  if (newgame) {
+    // Set new data
+    newgame.fields = entry.fields;
+    newgame = await newgame.update();
+
+    await newgame.publish();
+  }
+
+  // console.log('newgame.fields')
+  // console.log(newgame.fields)
+  // console.log('game.fields')
+  // console.log(game.fields)
+
+  console.timeEnd(logKey);
+  console.log('----------------');
+}
+
+main({});
