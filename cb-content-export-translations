@@ -42,7 +42,7 @@ const main = async ({
     languages.forEach(l => {
       row.push(
         e.fields.translation
-          ? e.fields.translation[l].replace(/\n$/) // Replace new line if it's the last char...
+          ? e.fields.translation[l]?.replace(/\n$/) // Replace new line if it's the last char...
           : ''
       );
     });
