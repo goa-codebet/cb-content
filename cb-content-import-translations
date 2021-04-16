@@ -58,6 +58,8 @@ const main = async ({
     );
     if (!entry.fields) entry.fields = {};
 
+    entry.fields.identifier = { 'en-US': item.identifier };
+
     entry.fields.translation = {
       ...entry.fields.translation,
       ...data.fields.translation,
